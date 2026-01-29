@@ -1,0 +1,149 @@
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
+import AppLayout from '@/components/AppLayout';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { FileText, Download, Calendar, User, ArrowLeft } from 'lucide-react';
+import { searchDocuments, getViewableDocumentUrl } from '@/utils/supabaseUtils';
+import { useNavigate } from 'react-router-dom';
+
+const DocumentView: React.FC = () => {
+  const { recordNumber } = useParams<{ recordNumber: string }>();
+  const [document, setDocument] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (recordNumber) {
+      loadDocument();
+    }
+  }, [recordNumber]);
+
+  const loadDocument = async () => {
+    try {
+      setLoading(true);
+      const documents = await searchDocuments({ recordNumber });
+      
+      if (documents && documents.length > 0) {
+        setDocument(documents[0]);
+      } else {
+        setError('Document not found');
+      }
+    } catch (err) {
+      console.error('Error loading document:', err);
+      setError('Failed to load document');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-amber-50 p-4">
+          <div className="container mx-auto max-w-4xl">
+            <div className="text-center py-8">
+              <p className="text-slate-600">Loading document...</p>
+            </div>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (error || !document) {
+    return (
+      <AppLayout>
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-amber-50 p-4">
+          <div className="container mx-auto max-w-4xl">
+            <div className="text-center py-8">
+              <FileText className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+              <p className="text-slate-600 mb-4">{error || 'Document not found'}</p>
+              <Button onClick={() => navigate('/')} variant="outline">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Home
+              </Button>
+            </div>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  return (
+    <AppLayout>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-amber-50 p-4">
+        <div className="container mx-auto max-w-4xl">
+          <div className="mb-6">
+            <Button 
+              variant="outline" 
+              onClick={() => navigate('/')}
+              className="mb-4"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Home
+            </Button>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <FileText className="h-6 w-6" />
+                  <span>{document.title}</span>
+                </div>
+                <span className="text-sm font-mono bg-gray-100 px-3 py-1 rounded">
+                  {document.record_number}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div className="flex items-center space-x-2">
+                  <Calendar className="h-4 w-4 text-gray-500" />
+                  <span className="text-sm">
+                    Recorded: {new Date(document.upload_date).toLocaleDateString()}
+                  </span>
+                </div>
+                {document.submitter_name && (
+                  <div className="flex items-center space-x-2">
+                    <User className="h-4 w-4 text-gray-500" />
+                    <span className="text-sm">Submitted by: {document.submitter_name}</span>
+                  </div>
+                )}
+              </div>
+              
+              <div className="space-y-4">
+                <Button
+                  onClick={() => window.open(getViewableDocumentUrl(document.file_path), '_blank')}
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  View Document PDF
+                </Button>
+                
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="font-semibold mb-2">Document Information</h3>
+                  <div className="space-y-2 text-sm">
+                    <div><strong>Record Number:</strong> {document.record_number}</div>
+                    <div><strong>Title:</strong> {document.title}</div>
+                    <div><strong>Upload Date:</strong> {new Date(document.upload_date).toLocaleString()}</div>
+                    {document.submitter_name && (
+                      <div><strong>Submitter:</strong> {document.submitter_name}</div>
+                    )}
+                    {document.submitter_email && (
+                      <div><strong>Email:</strong> {document.submitter_email}</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </AppLayout>
+  );
+};
+
+export default DocumentView;
