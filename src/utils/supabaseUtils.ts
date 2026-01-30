@@ -33,73 +33,134 @@ export const uploadDocument = async (params: UploadParams) => {
   try {
     console.log('Starting upload with params:', { ...params, fileData: params.fileData ? '[FILE_DATA]' : 'none' });
     
+    console.log('Checking authentication...');
     const { data: { session } } = await supabase.auth.getSession();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
+    console.log('Session:', session?.user ? 'Authenticated' : 'Not authenticated');
     
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
+    if (!session?.user) {
+      throw new Error('User not authenticated');
     }
 
-    let fileDataToUpload: string;
-    
-    if (params.file) {
-      if (params.file.type === 'application/pdf') {
-        const arrayBuffer = await params.file.arrayBuffer();
-        const pdfBytes = new Uint8Array(arrayBuffer);
-        const stampOptions = {
-          submitterName: params.submitterName || '',
-          isTrusteeUpload: params.isTrusteeUpload,
-          trusteeName: params.trusteeName,
-          clientName: params.clientName
-        };
-        const stampedPdfBytes = await addStampToDocument(pdfBytes, stampOptions);
-        fileDataToUpload = btoa(String.fromCharCode.apply(null, Array.from(stampedPdfBytes)));
-      } else {
-        const arrayBuffer = await params.file.arrayBuffer();
-        const bytes = new Uint8Array(arrayBuffer);
-        fileDataToUpload = btoa(String.fromCharCode.apply(null, Array.from(bytes)));
-      }
-    } else {
-      fileDataToUpload = params.fileData || '';
-    }
-    
-    const requestBody = {
-      title: params.title,
-      submitterName: params.isTrusteeUpload ? params.clientName : (params.submitterName || params.trusteeName),
-      fileName: params.file?.name || params.fileName,
-      fileData: fileDataToUpload,
-      clientName: params.clientName,
-      clientEmail: params.clientEmail,
-      privateNote: params.privateNote,
-      isTrusteeUpload: params.isTrusteeUpload,
-      trusteeId: params.trusteeId,
-      trusteeName: params.trusteeName,
-      folderId: params.folderId === 'no-folder' ? null : params.folderId
-    };
-    
-    console.log('Making request to:', UPLOAD_FUNCTION_URL);
-    const response = await fetch(UPLOAD_FUNCTION_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody)
+    let fileToUpload: Blob;
+    let fileName: string;
+
+    console.log('File validation:', {
+      hasFile: !!params.file,
+      isFile: params.file instanceof File,
+      size: params.file?.size,
+      type: typeof params.file
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Upload response error:', errorText);
-      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+    // Process the file (stamp PDF if needed)
+    if (params.file && params.file instanceof File && params.file.size > 0) {
+      fileName = params.file.name;
+      const fileSizeKB = params.file.size / 1024;
+      console.log(`Processing file: ${fileName}, Size: ${fileSizeKB.toFixed(2)} KB`);
+      
+      if (params.file.type === 'application/pdf') {
+        console.log('Stamping PDF...');
+        try {
+          const arrayBuffer = await params.file.arrayBuffer();
+          console.log('File loaded, stamping...');
+          const pdfBytes = new Uint8Array(arrayBuffer);
+          const stampOptions = {
+            submitterName: params.submitterName || '',
+            isTrusteeUpload: params.isTrusteeUpload,
+            trusteeName: params.trusteeName,
+            clientName: params.clientName
+          };
+          
+          // Use setTimeout to break up the work and prevent freezing
+          await new Promise(resolve => setTimeout(resolve, 0));
+          
+          const stampedPdfBytes = await addStampToDocument(pdfBytes, stampOptions);
+          console.log('PDF stamping completed');
+          fileToUpload = new Blob([stampedPdfBytes], { type: 'application/pdf' });
+        } catch (stampError) {
+          console.error('Stamping failed:', stampError);
+          throw new Error('Failed to process PDF: ' + (stampError instanceof Error ? stampError.message : 'Unknown error'));
+        }
+      } else {
+        fileToUpload = params.file;
+      }
+    } else if (params.fileData) {
+      // Fallback for base64 data (legacy)
+      console.log('Processing base64 file data...');
+      const binaryString = atob(params.fileData);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      fileToUpload = new Blob([bytes], { type: 'application/pdf' });
+      fileName = params.fileName || 'document.pdf';
+    } else {
+      console.error('Invalid file provided:', params.file);
+      throw new Error('No valid file provided. Please select a PDF file.');
     }
 
-    const result = await response.json();
-    console.log('Upload response:', result);
+    // Upload to Supabase Storage
+    const fileExt = fileName.split('.').pop();
+    const timestamp = Date.now();
+    const uniqueFileName = `${timestamp}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const filePath = `uploads/${uniqueFileName}`;
     
-    if (!result.success) {
-      throw new Error(result.error || 'Upload failed');
+    console.log('Uploading file to storage:', filePath);
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('documents')
+      .upload(filePath, fileToUpload, {
+        contentType: params.file?.type || 'application/pdf',
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error('Storage upload error:', uploadError);
+      throw new Error('Storage upload failed: ' + uploadError.message);
     }
 
-    return { success: true, document: result.document };
+    console.log('File uploaded successfully:', uploadData);
+
+    // Get the public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('documents')
+      .getPublicUrl(filePath);
+
+    console.log('Public URL:', publicUrl);
+
+    // Create database record
+    console.log('Creating database record...');
+    const recordData: any = {
+      title: params.title,
+      file_path: filePath,
+      file_url: publicUrl,
+      file_name: fileName,
+      submitter_name: params.isTrusteeUpload ? params.clientName : (params.submitterName || params.trusteeName),
+      user_id: session.user.id,
+      is_trustee_upload: params.isTrusteeUpload || false,
+      status: 'active'
+    };
+
+    if (params.clientName) recordData.client_name = params.clientName;
+    if (params.clientEmail) recordData.client_email = params.clientEmail;
+    if (params.privateNote) recordData.private_note = params.privateNote;
+    if (params.trusteeId) recordData.trustee_id = params.trusteeId;
+    if (params.trusteeName) recordData.trustee_name = params.trusteeName;
+    if (params.folderId && params.folderId !== 'no-folder') recordData.folder_id = params.folderId;
+
+    const { data: document, error: dbError } = await supabase
+      .from('documents')
+      .insert(recordData)
+      .select()
+      .single();
+
+    if (dbError) {
+      // Clean up uploaded file if database insert fails
+      console.error('Database insert error:', dbError);
+      await supabase.storage.from('documents').remove([filePath]);
+      throw new Error('Database error: ' + dbError.message);
+    }
+
+    console.log('Upload complete:', document);
+    return { success: true, document };
   } catch (error) {
     console.error('Upload error in supabaseUtils:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Upload failed' };

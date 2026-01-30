@@ -80,6 +80,9 @@ const UploadForm: React.FC<UploadFormProps> = ({ onUploadComplete }) => {
     
     try {
       console.log('Starting upload process...');
+      console.log('File object:', file);
+      console.log('File details:', { name: file?.name, size: file?.size, type: file?.type });
+      
       const result = await uploadDocument({
         file,
         title: title.trim(),

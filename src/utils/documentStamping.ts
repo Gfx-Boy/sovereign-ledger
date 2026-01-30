@@ -9,8 +9,14 @@ export interface StampOptions {
 
 export const addStampToDocument = async (pdfBytes: Uint8Array, options: StampOptions): Promise<Uint8Array> => {
   try {
-    const pdfDoc = await PDFDocument.load(pdfBytes);
+    console.log('Loading PDF document...');
+    const pdfDoc = await PDFDocument.load(pdfBytes, { 
+      ignoreEncryption: true,
+      updateMetadata: false 
+    });
     const pages = pdfDoc.getPages();
+    const totalPages = pages.length;
+    console.log(`PDF loaded with ${totalPages} pages, embedding font...`);
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     
     // Create stamp text based on account type
@@ -23,9 +29,13 @@ export const addStampToDocument = async (pdfBytes: Uint8Array, options: StampOpt
     
     const timestamp = new Date().toLocaleString();
     
-    // Add stamp to each page
-    pages.forEach((page) => {
-      const { width, height } = page.getSize();
+    console.log('Adding stamps to pages...');
+    // Only stamp first and last page for faster processing
+    const pagesToStamp = totalPages > 2 ? [0, totalPages - 1] : Array.from({ length: totalPages }, (_, i) => i);
+    
+    for (const pageIndex of pagesToStamp) {
+      const page = pages[pageIndex];
+      const { width } = page.getSize();
       
       // Position stamp in bottom right corner
       const stampX = width - 200;
@@ -60,9 +70,10 @@ export const addStampToDocument = async (pdfBytes: Uint8Array, options: StampOpt
         font,
         color: rgb(0.5, 0.5, 0.5),
       });
-    });
+    }
     
-    return await pdfDoc.save();
+    console.log('Saving stamped PDF...');
+    return await pdfDoc.save({ useObjectStreams: false });
   } catch (error) {
     console.error('Error adding stamp to document:', error);
     throw error;
