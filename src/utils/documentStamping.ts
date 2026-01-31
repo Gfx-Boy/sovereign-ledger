@@ -110,4 +110,3 @@ export const addStampToDocument = async (pdfBytes: Uint8Array, options: StampOpt
     throw error;
   }
 };
-};
