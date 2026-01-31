@@ -7,6 +7,54 @@ export interface StampOptions {
   clientName?: string;
 }
 
+// Helper function to stamp a single page
+const stampPage = (
+  page: any, 
+  font: any, 
+  submitterText: string, 
+  timestamp: string
+): void => {
+  const { width } = page.getSize();
+  
+  // Position stamp in bottom right corner
+  const stampX = width - 250;
+  const stampY = 35;
+  
+  // Add "Recorded by:" label and name in red
+  page.drawText('Recorded by:', {
+    x: stampX,
+    y: stampY + 25,
+    size: 11,
+    font,
+    color: rgb(0.8, 0, 0),
+  });
+  
+  page.drawText(submitterText, {
+    x: stampX,
+    y: stampY + 10,
+    size: 10,
+    font,
+    color: rgb(0.8, 0, 0),
+  });
+  
+  // Add "Recorded on:" label and timestamp in red
+  page.drawText('Recorded on:', {
+    x: stampX,
+    y: stampY - 5,
+    size: 11,
+    font,
+    color: rgb(0.8, 0, 0),
+  });
+  
+  page.drawText(timestamp, {
+    x: stampX,
+    y: stampY - 20,
+    size: 10,
+    font,
+    color: rgb(0.8, 0, 0),
+  });
+};
+
 export const addStampToDocument = async (pdfBytes: Uint8Array, options: StampOptions): Promise<Uint8Array> => {
   try {
     console.log('Loading PDF document...');
@@ -24,7 +72,7 @@ export const addStampToDocument = async (pdfBytes: Uint8Array, options: StampOpt
     if (options.isTrusteeUpload && options.trusteeName && options.clientName) {
       submitterText = `${options.trusteeName} on behalf of ${options.clientName}`;
     } else {
-      submitterText = options.submitterName;
+      submitterText = options.submitterName || 'Unknown';
     }
     
     const timestamp = new Date().toLocaleString('en-US', { 
@@ -35,55 +83,31 @@ export const addStampToDocument = async (pdfBytes: Uint8Array, options: StampOpt
       minute: '2-digit'
     });
     
-    console.log('Adding stamps to all pages...');
-    // Stamp every page
-    for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
-      const page = pages[pageIndex];
-      const { width } = page.getSize();
+    console.log(`Stamping all ${totalPages} pages with: "${submitterText}"...`);
+    
+    // Process pages in batches (pagination style) to avoid memory issues
+    const BATCH_SIZE = 10;
+    for (let batchStart = 0; batchStart < totalPages; batchStart += BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + BATCH_SIZE, totalPages);
+      console.log(`Processing pages ${batchStart + 1} to ${batchEnd}...`);
       
-      // Position stamp in bottom right corner
-      const stampX = width - 250;
-      const stampY = 35;
-      
-      // Add "Recorded by:" label and name in red
-      page.drawText('Recorded by:', {
-        x: stampX,
-        y: stampY + 25,
-        size: 11,
-        font,
-        color: rgb(0.8, 0, 0), // Red color
-      });
-      
-      page.drawText(submitterText, {
-        x: stampX,
-        y: stampY + 10,
-        size: 10,
-        font,
-        color: rgb(0.8, 0, 0), // Red color
-      });
-      
-      // Add "Recorded on:" label and timestamp in red
-      page.drawText('Recorded on:', {
-        x: stampX,
-        y: stampY - 5,
-        size: 11,
-        font,
-        color: rgb(0.8, 0, 0), // Red color
-      });
-      
-      page.drawText(timestamp, {
-        x: stampX,
-        y: stampY - 20,
-        size: 10,
-        font,
-        color: rgb(0.8, 0, 0), // Red color
-      });
+      for (let pageIndex = batchStart; pageIndex < batchEnd; pageIndex++) {
+        try {
+          stampPage(pages[pageIndex], font, submitterText, timestamp);
+        } catch (pageError) {
+          console.error(`Error stamping page ${pageIndex + 1}:`, pageError);
+          // Continue with other pages even if one fails
+        }
+      }
     }
     
-    console.log('Saving stamped PDF...');
-    return await pdfDoc.save({ useObjectStreams: false });
+    console.log('All pages stamped, saving PDF...');
+    const savedPdf = await pdfDoc.save({ useObjectStreams: false });
+    console.log(`PDF saved successfully, size: ${savedPdf.length} bytes`);
+    return savedPdf;
   } catch (error) {
     console.error('Error adding stamp to document:', error);
     throw error;
   }
+};
 };

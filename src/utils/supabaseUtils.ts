@@ -44,21 +44,38 @@ export const uploadDocument = async (params: UploadParams) => {
 
     let fileDataToUpload: string;
     
-    // Helper function to convert Uint8Array to base64 without stack overflow
-    const uint8ArrayToBase64 = (bytes: Uint8Array): string => {
-      const CHUNK_SIZE = 0x8000; // 32KB chunks to avoid stack overflow
-      let binary = '';
-      for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
-        const chunk = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.length));
-        binary += String.fromCharCode.apply(null, Array.from(chunk));
-      }
-      return btoa(binary);
+    // Simple and reliable base64 conversion using FileReader approach
+    const uint8ArrayToBase64 = (bytes: Uint8Array): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        try {
+          console.log(`Converting ${bytes.length} bytes to base64...`);
+          const blob = new Blob([bytes], { type: 'application/octet-stream' });
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const dataUrl = reader.result as string;
+            // Remove the data URL prefix (e.g., "data:application/octet-stream;base64,")
+            const base64 = dataUrl.split(',')[1];
+            console.log(`Conversion complete, base64 length: ${base64.length}`);
+            resolve(base64);
+          };
+          reader.onerror = () => {
+            console.error('FileReader error:', reader.error);
+            reject(reader.error);
+          };
+          reader.readAsDataURL(blob);
+        } catch (error) {
+          console.error('Error in uint8ArrayToBase64:', error);
+          reject(error);
+        }
+      });
     };
     
     if (params.file) {
       if (params.file.type === 'application/pdf') {
+        console.log('Processing PDF file:', params.file.name, 'Size:', params.file.size);
         const arrayBuffer = await params.file.arrayBuffer();
         const pdfBytes = new Uint8Array(arrayBuffer);
+        console.log('PDF loaded, starting stamping process...');
         const stampOptions = {
           submitterName: params.submitterName || '',
           isTrusteeUpload: params.isTrusteeUpload,
@@ -66,11 +83,13 @@ export const uploadDocument = async (params: UploadParams) => {
           clientName: params.clientName
         };
         const stampedPdfBytes = await addStampToDocument(pdfBytes, stampOptions);
-        fileDataToUpload = uint8ArrayToBase64(stampedPdfBytes);
+        console.log('Stamping complete, converting to base64...');
+        fileDataToUpload = await uint8ArrayToBase64(stampedPdfBytes);
       } else {
+        console.log('Processing non-PDF file:', params.file.name);
         const arrayBuffer = await params.file.arrayBuffer();
         const bytes = new Uint8Array(arrayBuffer);
-        fileDataToUpload = uint8ArrayToBase64(bytes);
+        fileDataToUpload = await uint8ArrayToBase64(bytes);
       }
     } else {
       fileDataToUpload = params.fileData || '';
