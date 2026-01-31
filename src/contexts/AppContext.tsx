@@ -68,6 +68,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!mountedRef.current) return;
     
     try {
+      console.log('Fetching user profile for:', userId);
       const { data, error } = await supabase
         .from('user_profiles')
         .select('*')
@@ -80,7 +81,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       
       if (data && mountedRef.current) {
+        console.log('User profile loaded:', data);
         setUserProfile(data);
+      } else {
+        console.log('No user profile found');
       }
     } catch (error) {
       console.error('Error fetching user profile:', error);

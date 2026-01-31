@@ -17,58 +17,66 @@ export const addStampToDocument = async (pdfBytes: Uint8Array, options: StampOpt
     const pages = pdfDoc.getPages();
     const totalPages = pages.length;
     console.log(`PDF loaded with ${totalPages} pages, embedding font...`);
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     
     // Create stamp text based on account type
-    let stampText: string;
+    let submitterText: string;
     if (options.isTrusteeUpload && options.trusteeName && options.clientName) {
-      stampText = `Submitted By ${options.trusteeName} on behalf of ${options.clientName}`;
+      submitterText = `${options.trusteeName} on behalf of ${options.clientName}`;
     } else {
-      stampText = `Submitted By ${options.submitterName}`;
+      submitterText = options.submitterName;
     }
     
-    const timestamp = new Date().toLocaleString();
+    const timestamp = new Date().toLocaleString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
     
-    console.log('Adding stamps to pages...');
-    // Only stamp first and last page for faster processing
-    const pagesToStamp = totalPages > 2 ? [0, totalPages - 1] : Array.from({ length: totalPages }, (_, i) => i);
-    
-    for (const pageIndex of pagesToStamp) {
+    console.log('Adding stamps to all pages...');
+    // Stamp every page
+    for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
       const page = pages[pageIndex];
       const { width } = page.getSize();
       
       // Position stamp in bottom right corner
-      const stampX = width - 200;
-      const stampY = 30;
+      const stampX = width - 250;
+      const stampY = 35;
       
-      // Add semi-transparent background
-      page.drawRectangle({
-        x: stampX - 10,
-        y: stampY - 5,
-        width: 190,
-        height: 40,
-        color: rgb(1, 1, 1),
-        opacity: 0.8,
-        borderColor: rgb(0.7, 0.7, 0.7),
-        borderWidth: 1,
-      });
-      
-      // Add stamp text
-      page.drawText(stampText, {
+      // Add "Recorded by:" label and name in red
+      page.drawText('Recorded by:', {
         x: stampX,
-        y: stampY + 15,
-        size: 8,
+        y: stampY + 25,
+        size: 11,
         font,
-        color: rgb(0, 0, 0),
+        color: rgb(0.8, 0, 0), // Red color
       });
       
-      // Add timestamp
+      page.drawText(submitterText, {
+        x: stampX,
+        y: stampY + 10,
+        size: 10,
+        font,
+        color: rgb(0.8, 0, 0), // Red color
+      });
+      
+      // Add "Recorded on:" label and timestamp in red
+      page.drawText('Recorded on:', {
+        x: stampX,
+        y: stampY - 5,
+        size: 11,
+        font,
+        color: rgb(0.8, 0, 0), // Red color
+      });
+      
       page.drawText(timestamp, {
         x: stampX,
-        y: stampY,
-        size: 7,
+        y: stampY - 20,
+        size: 10,
         font,
-        color: rgb(0.5, 0.5, 0.5),
+        color: rgb(0.8, 0, 0), // Red color
       });
     }
     

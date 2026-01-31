@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, LogOut } from 'lucide-react';
 import { useAppContext } from '@/contexts/AppContext';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/lib/supabase';
 
 interface ProfileDropdownProps {
   userEmail: string;
@@ -22,7 +23,7 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({
   onViewProfile,
   onLogout
 }) => {
-  const { setCurrentView, userProfile, logout } = useAppContext();
+  const { setCurrentView, userProfile } = useAppContext();
   const navigate = useNavigate();
 
   const getInitials = (name: string) => {
@@ -38,9 +39,12 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({
 
   const handleLogout = async () => {
     try {
-      await logout();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
       setCurrentView('home');
       navigate('/');
+      onLogout();
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -54,10 +58,13 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
           <Avatar className="h-8 w-8">
-            <AvatarImage 
-              src={profileImage || ''} 
-              alt={displayName} 
-            />
+            {profileImage && (
+              <AvatarImage 
+                src={profileImage} 
+                alt={displayName}
+                key={profileImage}
+              />
+            )}
             <AvatarFallback className="bg-slate-900 text-white">
               {getInitials(displayName)}
             </AvatarFallback>

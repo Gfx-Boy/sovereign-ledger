@@ -3,7 +3,7 @@ import AppLayout from '@/components/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { FileText, Upload, Search, User, Book } from 'lucide-react';
+import { FileText, Upload, Search, User, Book, TrendingUp, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { useAppContext } from '@/contexts/AppContext';
 import { supabase } from '@/lib/supabase';
 import UploadForm from '@/components/UploadForm';
@@ -23,6 +23,8 @@ const Dashboard: React.FC = () => {
   const [selectedDocument, setSelectedDocument] = useState<any>(null);
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [documentStats, setDocumentStats] = useState({ total: 0, public: 0, private: 0, lastRecorded: null as Date | null });
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const navigate = useNavigate();
   const mountedRef = useRef(true);
   const documentsLoadedRef = useRef(false);
@@ -63,6 +65,27 @@ const Dashboard: React.FC = () => {
       if (mountedRef.current) {
         setMyDocuments(data || []);
         documentsLoadedRef.current = true;
+        
+        // Calculate statistics
+        const total = data?.length || 0;
+        const publicDocs = data?.filter(doc => doc.is_public).length || 0;
+        const privateDocs = total - publicDocs;
+        const lastRecorded = data && data.length > 0 ? new Date(data[0].created_at) : null;
+        
+        setDocumentStats({
+          total,
+          public: publicDocs,
+          private: privateDocs,
+          lastRecorded
+        });
+        
+        // Create recent activity from documents
+        const activities = (data || []).slice(0, 5).map(doc => ({
+          type: 'upload',
+          message: `Uploaded: ${doc.title}`,
+          date: new Date(doc.created_at)
+        }));
+        setRecentActivity(activities);
       }
     } catch (error) {
       console.error('Error loading documents:', error);
@@ -238,7 +261,13 @@ const Dashboard: React.FC = () => {
                 </CardHeader>
                 <CardContent className="text-center">
                   <Avatar className="h-20 w-20 mx-auto mb-4">
-                    <AvatarImage src={userProfile?.profile_image_url} alt={displayName} />
+                    {userProfile?.profile_image_url && (
+                      <AvatarImage 
+                        src={userProfile.profile_image_url} 
+                        alt={displayName}
+                        key={userProfile.profile_image_url}
+                      />
+                    )}
                     <AvatarFallback className="bg-slate-900 text-white text-xl">
                       {getInitials(displayName)}
                     </AvatarFallback>
@@ -257,62 +286,120 @@ const Dashboard: React.FC = () => {
             </div>
 
             <div className="lg:col-span-2">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card>
+              <div className="grid grid-cols-1 gap-6">
+                {/* My Ledger Summary Card */}
+                <Card className="border-amber-200 bg-gradient-to-br from-amber-50 to-white">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Upload className="h-5 w-5" />
-                      Record Document
+                    <CardTitle className="flex items-center gap-2 text-amber-900">
+                      <TrendingUp className="h-5 w-5" />
+                      My Ledger Summary
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm text-slate-600 mb-4">Record a new document to the ledger</p>
+                    <div className="grid grid-cols-3 gap-4 mb-4">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-amber-900">{documentStats.total}</div>
+                        <div className="text-xs text-slate-600">Total Documents</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-green-600">{documentStats.public}</div>
+                        <div className="text-xs text-slate-600">Public Entries</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-600">{documentStats.private}</div>
+                        <div className="text-xs text-slate-600">Private Entries</div>
+                      </div>
+                    </div>
+                    <div className="text-sm text-slate-600 mb-4">
+                      <strong>Last Recorded:</strong> {documentStats.lastRecorded 
+                        ? documentStats.lastRecorded.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                        : 'No documents yet'}
+                    </div>
                     <Button 
                       className="w-full bg-amber-600 hover:bg-amber-700 text-white"
                       onClick={handleUpload}
                     >
                       Upload New Document
                     </Button>
+                    <p className="text-xs text-slate-500 mt-3 text-center">
+                      Upload and timestamp your documents to the Sovereign Ledger for proof of record in the private domain.
+                    </p>
                   </CardContent>
                 </Card>
-                
-                <Card>
+
+                {/* Recent Activity Card */}
+                <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-white">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Search className="h-5 w-5" />
-                      Search Documents
+                    <CardTitle className="flex items-center gap-2 text-blue-900">
+                      <Clock className="h-5 w-5" />
+                      Recent Activity
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm text-slate-600 mb-4">Search your recorded documents</p>
-                    <Button 
-                      variant="outline" 
-                      className="w-full border-amber-600 text-amber-600 hover:bg-amber-600 hover:text-white"
-                      onClick={handleSearch}
-                    >
-                      Search My Documents
-                    </Button>
+                    {recentActivity.length > 0 ? (
+                      <div className="space-y-3">
+                        {recentActivity.map((activity, index) => (
+                          <div key={index} className="flex items-start gap-3 text-sm">
+                            {activity.type === 'upload' && <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />}
+                            {activity.type === 'delete' && <XCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />}
+                            {activity.type === 'failed' && <AlertCircle className="h-4 w-4 text-orange-600 mt-0.5 flex-shrink-0" />}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-slate-700 truncate">{activity.message}</div>
+                              <div className="text-xs text-slate-500">
+                                {activity.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 text-slate-500 text-sm">
+                        No recent activity
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
                 
-                <Card className="md:col-span-2">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Book className="h-5 w-5" />
-                      Knowledge Base
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-slate-600 mb-4">Find answers to common questions</p>
-                    <Button 
-                      variant="outline" 
-                      className="w-full border-amber-600 text-amber-600 hover:bg-amber-600 hover:text-white"
-                      onClick={handleKnowledgeBase}
-                    >
-                      View FAQ
-                    </Button>
-                  </CardContent>
-                </Card>
+                {/* Existing action cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Search className="h-5 w-5" />
+                        Search Documents
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-slate-600 mb-4">Search your recorded documents</p>
+                      <Button 
+                        variant="outline" 
+                        className="w-full border-amber-600 text-amber-600 hover:bg-amber-600 hover:text-white"
+                        onClick={handleSearch}
+                      >
+                        Search My Documents
+                      </Button>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Book className="h-5 w-5" />
+                        Knowledge Base
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-slate-600 mb-4">Find answers to common questions</p>
+                      <Button 
+                        variant="outline" 
+                        className="w-full border-amber-600 text-amber-600 hover:bg-amber-600 hover:text-white"
+                        onClick={handleKnowledgeBase}
+                      >
+                        View FAQ
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
             </div>
           </div>
