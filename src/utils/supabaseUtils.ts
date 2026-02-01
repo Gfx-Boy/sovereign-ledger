@@ -17,6 +17,7 @@ interface UploadParams {
   trusteeId?: string;
   trusteeName?: string;
   folderId?: string;
+  isPublic?: boolean;
 }
 
 let uploadInProgress = false;
@@ -106,7 +107,8 @@ export const uploadDocument = async (params: UploadParams) => {
       isTrusteeUpload: params.isTrusteeUpload,
       trusteeId: params.trusteeId,
       trusteeName: params.trusteeName,
-      folderId: params.folderId === 'no-folder' ? null : params.folderId
+      folderId: params.folderId === 'no-folder' ? null : params.folderId,
+      isPublic: params.isPublic ?? false
     };
     
     console.log('Making request to:', UPLOAD_FUNCTION_URL);
@@ -168,6 +170,9 @@ export const createUserProfile = async (userId: string, email: string, fullName:
 export const searchDocuments = async (params: { recordNumber?: string; title?: string; name?: string }) => {
   try {
     let query = supabase.from('documents').select('*');
+    
+    // Only return public documents in search results
+    query = query.eq('is_public', true);
     
     if (params.recordNumber) {
       query = query.ilike('record_number', `%${params.recordNumber}%`);

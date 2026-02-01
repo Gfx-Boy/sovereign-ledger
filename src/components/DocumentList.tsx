@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileText, Download, Calendar, User, Trash2, Share2, FolderOpen } from 'lucide-react';
+import { FileText, Download, Calendar, User, Trash2, Share2, FolderOpen, Lock, Globe } from 'lucide-react';
 import { getViewableDocumentUrl } from '@/utils/supabaseUtils';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
@@ -207,9 +208,20 @@ const DocumentList: React.FC<DocumentListProps> = ({
           <Card key={doc.id} className="w-full">
             <CardHeader className="pb-3">
               <CardTitle className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 gap-2">
                   <FileText className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
                   <span className="text-sm sm:text-base truncate">{doc.title}</span>
+                  {doc.is_public ? (
+                    <Badge className="bg-green-100 text-green-700 hover:bg-green-100 text-xs">
+                      <Globe className="h-3 w-3 mr-1" />
+                      Public
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 text-xs">
+                      <Lock className="h-3 w-3 mr-1" />
+                      Private
+                    </Badge>
+                  )}
                 </div>
                 <span className="text-xs sm:text-sm font-mono bg-gray-100 px-2 py-1 rounded self-start">
                   {doc.record_number}
