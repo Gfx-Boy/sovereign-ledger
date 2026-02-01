@@ -33,17 +33,36 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     setCurrentView('dashboard');
     mountedRef.current = true;
+    // Reset refs when component mounts
+    documentsLoadedRef.current = false;
+    loadingRef.current = false;
     return () => {
       mountedRef.current = false;
     };
   }, [setCurrentView]);
 
   const loadMyDocuments = useCallback(async (force = false) => {
-    if (!user || !mountedRef.current || loadingRef.current) {
+    console.log('loadMyDocuments called, user:', !!user, 'mounted:', mountedRef.current, 'loading:', loadingRef.current);
+    
+    if (!user) {
+      console.log('No user, skipping document load');
+      setLoadingDocuments(false);
+      return;
+    }
+    
+    if (!mountedRef.current) {
+      console.log('Component not mounted, skipping');
+      return;
+    }
+    
+    if (loadingRef.current && !force) {
+      console.log('Already loading, skipping');
       return;
     }
     
     if (documentsLoadedRef.current && !force) {
+      console.log('Documents already loaded, skipping');
+      setLoadingDocuments(false);
       return;
     }
     
@@ -52,11 +71,14 @@ const Dashboard: React.FC = () => {
     setError(null);
     
     try {
+      console.log('Fetching documents for user:', user.id);
       const { data, error } = await supabase
         .from('documents')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
+
+      console.log('Documents fetched:', data?.length, 'error:', error);
 
       if (error) {
         throw error;
@@ -102,7 +124,9 @@ const Dashboard: React.FC = () => {
 
   // Only load documents when returning to main dashboard view
   useEffect(() => {
+    console.log('Dashboard effect - user:', !!user, 'showUpload:', showUpload, 'showSearch:', showSearch, 'showCertificate:', showCertificate);
     if (user && !showUpload && !showSearch && !showCertificate) {
+      console.log('Triggering document load...');
       loadMyDocuments();
     }
   }, [user, showUpload, showSearch, showCertificate, loadMyDocuments]);

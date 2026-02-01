@@ -143,6 +143,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentView('home');
       } else if (session?.user) {
         setUser(session.user);
+        // Reset login/signup modals when user is authenticated
+        setShowLogin(false);
+        setShowSignup(false);
         await fetchUserProfile(session.user.id);
       }
     });
