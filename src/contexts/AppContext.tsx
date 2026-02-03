@@ -145,6 +145,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       console.log('Auth state changed:', event);
       
+      // Mark auth as initialized immediately on any auth event
+      if (!authInitializedRef.current) {
+        console.log('AppContext: Setting authInitialized = true from onAuthStateChange');
+        authInitializedRef.current = true;
+        setAuthInitialized(true);
+      }
+      
       if (event === 'SIGNED_OUT') {
         setUser(null);
         setUserProfile(null);
@@ -155,12 +162,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setShowLogin(false);
         setShowSignup(false);
         await fetchUserProfile(session.user.id);
-      }
-      
-      // Make sure auth is marked as initialized after any auth state change
-      if (!authInitializedRef.current) {
-        authInitializedRef.current = true;
-        setAuthInitialized(true);
       }
     });
 
