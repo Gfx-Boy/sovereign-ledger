@@ -132,6 +132,23 @@ export const uploadDocument = async (params: UploadParams) => {
       throw new Error(result.error || 'Upload failed');
     }
 
+    // WORKAROUND: Edge Function doesn't properly handle isPublic, so update it directly
+    if (result.document && params.isPublic !== undefined && result.document.is_public !== params.isPublic) {
+      console.log(`Fixing is_public field: Edge Function returned ${result.document.is_public}, but should be ${params.isPublic}`);
+      
+      const { error: updateError } = await supabase
+        .from('documents')
+        .update({ is_public: params.isPublic })
+        .eq('id', result.document.id);
+      
+      if (updateError) {
+        console.error('Failed to update is_public field:', updateError);
+      } else {
+        result.document.is_public = params.isPublic;
+        console.log('Successfully updated is_public to:', params.isPublic);
+      }
+    }
+
     return { success: true, document: result.document };
   } catch (error) {
     console.error('Upload error in supabaseUtils:', error);
