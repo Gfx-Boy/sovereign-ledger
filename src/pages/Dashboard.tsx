@@ -64,19 +64,35 @@ const Dashboard: React.FC = () => {
     
     try {
       console.log('Fetching documents for user:', user.id);
-      const { data, error } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      
+      const startTime = Date.now();
+      console.log('About to query Supabase documents table...');
+      
+      let data, error;
+      try {
+        const response = await supabase
+          .from('documents')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+        
+        data = response.data;
+        error = response.error;
 
-      console.log('Documents fetched:', data?.length, 'error:', error);
-
-      if (error) {
-        throw error;
+        const elapsed = Date.now() - startTime;
+        console.log(`Documents fetched in ${elapsed}ms:`, data?.length, 'documents', 'error:', error);
+        
+        if (error) {
+          console.error('Supabase error:', error);
+          throw error;
+        }
+      } catch (err) {
+        console.error('CAUGHT ERROR in loadMyDocuments:', err);
+        throw err;
       }
 
       if (mountedRef.current) {
+        console.log('Setting documents in state:', data);
         setMyDocuments(data || []);
         documentsLoadedRef.current = true;
         
@@ -125,7 +141,7 @@ const Dashboard: React.FC = () => {
 
   // Load documents whenever we're in dashboard view and user is available
   useEffect(() => {
-    console.log('Dashboard effect - authInitialized:', authInitialized, 'user:', !!user, 'showUpload:', showUpload, 'showSearch:', showSearch, 'showCertificate:', showCertificate);
+    console.log('Dashboard effect triggered - authInitialized:', authInitialized, 'user:', !!user, 'showUpload:', showUpload, 'showSearch:', showSearch, 'showCertificate:', showCertificate);
     
     // Wait for auth to initialize before trying to load documents
     if (!authInitialized) {
@@ -136,8 +152,10 @@ const Dashboard: React.FC = () => {
     // Load documents when in dashboard view and user is logged in
     if (user && !showUpload && !showSearch && !showCertificate) {
       documentsLoadedRef.current = false;
-      console.log('Loading documents for dashboard...');
+      console.log('Conditions met, loading documents for dashboard...');
       loadMyDocuments(true);
+    } else {
+      console.log('Conditions NOT met - user:', !!user, 'showUpload:', showUpload, 'showSearch:', showSearch, 'showCertificate:', showCertificate);
     }
   }, [authInitialized, user, showUpload, showSearch, showCertificate, loadMyDocuments]);
 
