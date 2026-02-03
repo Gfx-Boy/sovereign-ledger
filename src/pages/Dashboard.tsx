@@ -48,11 +48,17 @@ const Dashboard: React.FC = () => {
     setError(null);
 
     try {
+      console.log('Dashboard: Executing Supabase query...');
+      const startTime = Date.now();
+      
       const { data, error: fetchError } = await supabase
         .from('documents')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
+
+      const elapsed = Date.now() - startTime;
+      console.log(`Dashboard: Query completed in ${elapsed}ms`);
 
       if (fetchError) {
         console.error('Dashboard: Error fetching documents:', fetchError);

@@ -121,30 +121,70 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let isMounted = true;
     console.log('AppContext: Starting auth initialization...');
 
+    // Subscribe to auth state changes FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, newSession) => {
+        if (!isMounted) return;
+        
+        console.log('AppContext: Auth state changed:', event, !!newSession?.user);
+
+        // Always update session/user state on any auth event
+        if (newSession?.user) {
+          console.log('AppContext: Setting user from auth event');
+          setSession(newSession);
+          setUser(newSession.user);
+          
+          if (event === 'SIGNED_IN') {
+            setShowLogin(false);
+            setShowSignup(false);
+          }
+          
+          // Fetch profile in background
+          fetchUserProfile(newSession.user.id);
+        } else if (event === 'SIGNED_OUT') {
+          console.log('AppContext: User signed out');
+          setSession(null);
+          setUser(null);
+          setUserProfile(null);
+          setCurrentView('home');
+        }
+        
+        // Mark as initialized after handling the event
+        if (!authInitialized) {
+          console.log('AppContext: Marking auth as initialized');
+          setAuthInitialized(true);
+          setIsLoading(false);
+        }
+      }
+    );
+
+    // Then get the current session
     const initAuth = async () => {
       try {
-        // Get the current session from Supabase
+        console.log('AppContext: Getting current session...');
         const { data: { session: currentSession }, error } = await supabase.auth.getSession();
         
         if (error) {
-          console.error('Error getting session:', error);
+          console.error('AppContext: Error getting session:', error);
         }
 
         if (isMounted) {
-          console.log('AppContext: Session retrieved:', !!currentSession);
+          console.log('AppContext: Session check complete, has session:', !!currentSession);
           
           if (currentSession?.user) {
+            console.log('AppContext: Setting user from getSession');
             setSession(currentSession);
             setUser(currentSession.user);
             await fetchUserProfile(currentSession.user.id);
           }
           
+          // Always mark as initialized after getSession completes
           setIsLoading(false);
           setAuthInitialized(true);
-          console.log('AppContext: Auth initialized, user:', !!currentSession?.user);
+          console.log('AppContext: Auth fully initialized');
         }
       } catch (err) {
-        console.error('Auth initialization error:', err);
+        console.error('AppContext: Auth initialization error:', err);
         if (isMounted) {
           setIsLoading(false);
           setAuthInitialized(true);
@@ -152,39 +192,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
 
-    // Initialize auth
     initAuth();
-
-    // Subscribe to auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
-        if (!isMounted) return;
-        
-        console.log('Auth state changed:', event, !!newSession?.user);
-
-        if (event === 'SIGNED_IN' && newSession?.user) {
-          setSession(newSession);
-          setUser(newSession.user);
-          setShowLogin(false);
-          setShowSignup(false);
-          await fetchUserProfile(newSession.user.id);
-        } else if (event === 'SIGNED_OUT') {
-          setSession(null);
-          setUser(null);
-          setUserProfile(null);
-          setCurrentView('home');
-        } else if (event === 'TOKEN_REFRESHED' && newSession) {
-          setSession(newSession);
-          setUser(newSession.user);
-        }
-        
-        // Mark as initialized on any auth event
-        if (!authInitialized) {
-          setAuthInitialized(true);
-          setIsLoading(false);
-        }
-      }
-    );
 
     return () => {
       isMounted = false;
