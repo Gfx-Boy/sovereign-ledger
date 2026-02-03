@@ -30,17 +30,6 @@ const Dashboard: React.FC = () => {
   const documentsLoadedRef = useRef(false);
   const loadingRef = useRef(false);
 
-  useEffect(() => {
-    setCurrentView('dashboard');
-    mountedRef.current = true;
-    // Reset refs when component mounts
-    documentsLoadedRef.current = false;
-    loadingRef.current = false;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [setCurrentView]);
-
   const loadMyDocuments = useCallback(async (force = false) => {
     console.log('loadMyDocuments called, user:', !!user, 'mounted:', mountedRef.current, 'loading:', loadingRef.current);
     
@@ -122,12 +111,24 @@ const Dashboard: React.FC = () => {
     }
   }, [user]);
 
-  // Only load documents when returning to main dashboard view
+  useEffect(() => {
+    setCurrentView('dashboard');
+    mountedRef.current = true;
+    // Reset refs when component mounts - always reload documents on fresh mount
+    documentsLoadedRef.current = false;
+    loadingRef.current = false;
+    
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [setCurrentView]);
+
+  // Load documents when user is available or view changes
   useEffect(() => {
     console.log('Dashboard effect - user:', !!user, 'showUpload:', showUpload, 'showSearch:', showSearch, 'showCertificate:', showCertificate);
     if (user && !showUpload && !showSearch && !showCertificate) {
       console.log('Triggering document load...');
-      loadMyDocuments();
+      loadMyDocuments(true);
     }
   }, [user, showUpload, showSearch, showCertificate, loadMyDocuments]);
 
