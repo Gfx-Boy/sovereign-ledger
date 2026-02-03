@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,151 +13,102 @@ import RecordCertificate from '@/components/RecordCertificate';
 import { useNavigate } from 'react-router-dom';
 
 const Dashboard: React.FC = () => {
-  const { setCurrentView, user, userProfile, authInitialized } = useAppContext();
+  const { setCurrentView, user, userProfile, authInitialized, isLoading } = useAppContext();
+  const navigate = useNavigate();
+  
+  // View states
   const [showUpload, setShowUpload] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showCertificate, setShowCertificate] = useState(false);
+  
+  // Data states
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [myDocuments, setMyDocuments] = useState<any[]>([]);
   const [uploadedDocument, setUploadedDocument] = useState<any>(null);
   const [selectedDocument, setSelectedDocument] = useState<any>(null);
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [documentStats, setDocumentStats] = useState({ total: 0, public: 0, private: 0, lastRecorded: null as Date | null });
+  const [documentStats, setDocumentStats] = useState({ 
+    total: 0, 
+    public: 0, 
+    private: 0, 
+    lastRecorded: null as Date | null 
+  });
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
-  const navigate = useNavigate();
-  const mountedRef = useRef(true);
-  const documentsLoadedRef = useRef(false);
-  const loadingRef = useRef(false);
 
-  // Redirect to login if not authenticated after auth check completes
-  useEffect(() => {
-    if (authInitialized && !user) {
-      console.log('Dashboard: No user after auth initialized, redirecting to login');
-      navigate('/login');
-    }
-  }, [authInitialized, user, navigate]);
-
-  const loadMyDocuments = useCallback(async (force = false) => {
-    console.log('loadMyDocuments called, user:', !!user, 'mounted:', mountedRef.current, 'loading:', loadingRef.current, 'force:', force);
-    
+  // Load documents function
+  const loadMyDocuments = useCallback(async () => {
     if (!user) {
-      console.log('No user, skipping document load');
-      setLoadingDocuments(false);
+      console.log('Dashboard: No user, skipping document load');
       return;
     }
-    
-    if (!mountedRef.current) {
-      console.log('Component not mounted, skipping');
-      return;
-    }
-    
-    // Prevent duplicate simultaneous loads
-    if (loadingRef.current && !force) {
-      console.log('Already loading, skipping');
-      return;
-    }
-    
-    loadingRef.current = true;
+
+    console.log('Dashboard: Loading documents for user:', user.id);
     setLoadingDocuments(true);
     setError(null);
-    
+
     try {
-      console.log('Fetching documents for user:', user.id);
-      
-      const startTime = Date.now();
-      console.log('About to query Supabase documents table...');
-      
-      let data, error;
-      try {
-        const response = await supabase
-          .from('documents')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-        
-        data = response.data;
-        error = response.error;
+      const { data, error: fetchError } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
 
-        const elapsed = Date.now() - startTime;
-        console.log(`Documents fetched in ${elapsed}ms:`, data?.length, 'documents', 'error:', error);
-        
-        if (error) {
-          console.error('Supabase error:', error);
-          throw error;
-        }
-      } catch (err) {
-        console.error('CAUGHT ERROR in loadMyDocuments:', err);
-        throw err;
+      if (fetchError) {
+        console.error('Dashboard: Error fetching documents:', fetchError);
+        throw fetchError;
       }
 
-      if (mountedRef.current) {
-        console.log('Setting documents in state:', data);
-        setMyDocuments(data || []);
-        documentsLoadedRef.current = true;
-        
-        // Calculate statistics
-        const total = data?.length || 0;
-        const publicDocs = data?.filter(doc => doc.is_public).length || 0;
-        const privateDocs = total - publicDocs;
-        const lastRecorded = data && data.length > 0 ? new Date(data[0].created_at) : null;
-        
-        setDocumentStats({
-          total,
-          public: publicDocs,
-          private: privateDocs,
-          lastRecorded
-        });
-        
-        // Create recent activity from documents
-        const activities = (data || []).slice(0, 5).map(doc => ({
-          type: 'upload',
-          message: `Uploaded: ${doc.title}`,
-          date: new Date(doc.created_at)
-        }));
-        setRecentActivity(activities);
-      }
-    } catch (error) {
-      console.error('Error loading documents:', error);
-      if (mountedRef.current) {
-        setError('Failed to load documents. Please try again.');
-      }
+      console.log('Dashboard: Loaded', data?.length || 0, 'documents');
+      setMyDocuments(data || []);
+
+      // Calculate statistics
+      const total = data?.length || 0;
+      const publicDocs = data?.filter(doc => doc.is_public).length || 0;
+      const privateDocs = total - publicDocs;
+      const lastRecorded = data && data.length > 0 ? new Date(data[0].created_at) : null;
+
+      setDocumentStats({
+        total,
+        public: publicDocs,
+        private: privateDocs,
+        lastRecorded
+      });
+
+      // Create recent activity
+      const activities = (data || []).slice(0, 5).map(doc => ({
+        type: 'upload',
+        message: `Uploaded: ${doc.title}`,
+        date: new Date(doc.created_at)
+      }));
+      setRecentActivity(activities);
+    } catch (err: any) {
+      console.error('Dashboard: Failed to load documents:', err);
+      setError('Failed to load documents. Please try again.');
     } finally {
-      if (mountedRef.current) {
-        setLoadingDocuments(false);
-      }
-      loadingRef.current = false;
+      setLoadingDocuments(false);
     }
   }, [user]);
 
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (authInitialized && !user) {
+      console.log('Dashboard: Not authenticated, redirecting to login');
+      navigate('/login', { replace: true });
+    }
+  }, [authInitialized, user, navigate]);
+
+  // Set current view
   useEffect(() => {
     setCurrentView('dashboard');
-    mountedRef.current = true;
-    
-    return () => {
-      mountedRef.current = false;
-    };
   }, [setCurrentView]);
 
-  // Load documents whenever we're in dashboard view and user is available
+  // Load documents when user is available and we're on dashboard view
   useEffect(() => {
-    console.log('Dashboard effect triggered - authInitialized:', authInitialized, 'user:', !!user, 'showUpload:', showUpload, 'showSearch:', showSearch, 'showCertificate:', showCertificate);
-    
-    // Wait for auth to initialize before trying to load documents
-    if (!authInitialized) {
-      console.log('Auth not initialized yet, waiting...');
-      return;
-    }
-    
-    // Load documents when in dashboard view and user is logged in
     if (user && !showUpload && !showSearch && !showCertificate) {
-      documentsLoadedRef.current = false;
-      console.log('Conditions met, loading documents for dashboard...');
-      loadMyDocuments(true);
-    } else {
-      console.log('Conditions NOT met - user:', !!user, 'showUpload:', showUpload, 'showSearch:', showSearch, 'showCertificate:', showCertificate);
+      loadMyDocuments();
     }
-  }, [authInitialized, user, showUpload, showSearch, showCertificate, loadMyDocuments]);
+  }, [user, showUpload, showSearch, showCertificate, loadMyDocuments]);
 
   const handleViewProfile = () => {
     setCurrentView('profile');
@@ -209,7 +160,7 @@ const Dashboard: React.FC = () => {
 
   const handleDocumentDeleted = useCallback(() => {
     // Reload documents immediately after deletion
-    loadMyDocuments(true);
+    loadMyDocuments();
   }, [loadMyDocuments]);
 
   const getInitials = (name: string) => {
@@ -219,8 +170,8 @@ const Dashboard: React.FC = () => {
 
   const displayName = userProfile?.full_name || userProfile?.display_name || user?.email || 'User';
 
-  // Show loading screen while auth is initializing
-  if (!authInitialized) {
+  // Show loading screen while auth is initializing or loading
+  if (!authInitialized || isLoading) {
     return (
       <AppLayout>
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-amber-50 p-4 flex items-center justify-center">
@@ -233,7 +184,7 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  // If no user after auth initialization, redirect (handled by useEffect)
+  // If no user after auth initialization, show redirect message
   if (!user) {
     return (
       <AppLayout>
@@ -497,7 +448,7 @@ const Dashboard: React.FC = () => {
                 <div className="text-center py-8">
                   <p className="text-red-600 mb-4">{error}</p>
                   <Button 
-                    onClick={() => loadMyDocuments(true)}
+                    onClick={() => loadMyDocuments()}
                     className="bg-amber-600 hover:bg-amber-700 text-white"
                   >
                     Try Again

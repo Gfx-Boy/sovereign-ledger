@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { User } from '@supabase/supabase-js';
+import { User, Session } from '@supabase/supabase-js';
 
 interface UserProfile {
   id: string;
@@ -13,189 +13,208 @@ interface UserProfile {
 }
 
 interface AppContextType {
+  // Sidebar
   sidebarOpen: boolean;
   toggleSidebar: () => void;
+  // Auth state
   user: User | null;
-  setUser: (user: User | null) => void;
+  session: Session | null;
   userProfile: UserProfile | null;
+  isLoading: boolean;
+  authInitialized: boolean;
+  // Actions
+  setUser: (user: User | null) => void;
   setUserProfile: (profile: UserProfile | null) => void;
+  refreshProfile: () => Promise<void>;
+  logout: () => Promise<void>;
+  // View management
   currentView: 'home' | 'upload' | 'search' | 'certificate' | 'dashboard' | 'profile' | 'trustee-upload' | 'trustee-dashboard' | 'knowledge-base';
   setCurrentView: (view: 'home' | 'upload' | 'search' | 'certificate' | 'dashboard' | 'profile' | 'trustee-upload' | 'trustee-dashboard' | 'knowledge-base') => void;
-  refreshProfile: () => Promise<void>;
-  isTrustee: boolean;
-  logout: () => Promise<void>;
+  // Modals
   showLogin: boolean;
   setShowLogin: (show: boolean) => void;
   showSignup: boolean;
   setShowSignup: (show: boolean) => void;
-  authInitialized: boolean;
+  // Computed
+  isTrustee: boolean;
 }
 
-const defaultAppContext: AppContextType = {
-  sidebarOpen: false,
-  toggleSidebar: () => {},
-  user: null,
-  setUser: () => {},
-  userProfile: null,
-  setUserProfile: () => {},
-  currentView: 'home',
-  setCurrentView: () => {},
-  refreshProfile: async () => {},
-  isTrustee: false,
-  logout: async () => {},
-  showLogin: false,
-  setShowLogin: () => {},
-  showSignup: false,
-  setShowSignup: () => {},
-  authInitialized: false,
+const AppContext = createContext<AppContextType | undefined>(undefined);
+
+export const useAppContext = () => {
+  const context = useContext(AppContext);
+  if (!context) {
+    throw new Error('useAppContext must be used within an AppProvider');
+  }
+  return context;
 };
-
-const AppContext = createContext<AppContextType>(defaultAppContext);
-
-export const useAppContext = () => useContext(AppContext);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [authInitialized, setAuthInitialized] = useState(false);
   const [currentView, setCurrentView] = useState<'home' | 'upload' | 'search' | 'certificate' | 'dashboard' | 'profile' | 'trustee-upload' | 'trustee-dashboard' | 'knowledge-base'>('home');
   const [showLogin, setShowLogin] = useState(false);
   const [showSignup, setShowSignup] = useState(false);
-  const [authInitialized, setAuthInitialized] = useState(false);
-  const mountedRef = useRef(true);
-  const authInitializedRef = useRef(false);
 
   const isTrustee = userProfile?.user_role === 'trustee';
 
+  // Fetch user profile from database
   const fetchUserProfile = useCallback(async (userId: string) => {
-    if (!mountedRef.current) return;
-    
     try {
-      console.log('Fetching user profile for:', userId);
+      console.log('Fetching profile for user:', userId);
       const { data, error } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('user_id', userId)
         .single();
-      
+
       if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching user profile:', error);
-        return;
+        console.error('Error fetching profile:', error);
+        return null;
       }
-      
-      if (data && mountedRef.current) {
-        console.log('User profile loaded:', data);
+
+      if (data) {
+        console.log('Profile loaded:', data);
         setUserProfile(data);
-      } else {
-        console.log('No user profile found');
+        return data;
       }
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
+      return null;
+    } catch (err) {
+      console.error('Profile fetch error:', err);
+      return null;
     }
   }, []);
 
+  // Refresh profile
   const refreshProfile = useCallback(async () => {
-    if (user && mountedRef.current) {
+    if (user) {
       await fetchUserProfile(user.id);
     }
   }, [user, fetchUserProfile]);
 
+  // Logout
   const logout = useCallback(async () => {
     try {
+      console.log('Logging out...');
       await supabase.auth.signOut();
-      if (mountedRef.current) {
-        setUser(null);
-        setUserProfile(null);
-        setCurrentView('home');
-      }
+      setUser(null);
+      setSession(null);
+      setUserProfile(null);
+      setCurrentView('home');
+      console.log('Logged out successfully');
     } catch (error) {
-      console.error('Error during logout:', error);
+      console.error('Logout error:', error);
     }
   }, []);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    
-    const initializeAuth = async () => {
-      if (authInitializedRef.current) return;
-      
-      try {
-        console.log('AppContext: Initializing auth...');
-        const { data: { session } } = await supabase.auth.getSession();
-        if (mountedRef.current) {
-          console.log('AppContext: Session check complete, user exists:', !!session?.user);
-          setUser(session?.user ?? null);
-          if (session?.user) {
-            await fetchUserProfile(session.user.id);
-          }
-          authInitializedRef.current = true;
-          setAuthInitialized(true);
-          console.log('AppContext: Auth initialized');
-        }
-      } catch (error) {
-        console.error('Error getting session:', error);
-        setAuthInitialized(true); // Still mark as initialized even on error
-      }
-    };
-
-    initializeAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mountedRef.current) return;
-      
-      console.log('Auth state changed:', event);
-      
-      // Mark auth as initialized immediately on any auth event
-      if (!authInitializedRef.current) {
-        console.log('AppContext: Setting authInitialized = true from onAuthStateChange');
-        authInitializedRef.current = true;
-        setAuthInitialized(true);
-      }
-      
-      if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setUserProfile(null);
-        setCurrentView('home');
-      } else if (session?.user) {
-        setUser(session.user);
-        // Reset login/signup modals when user is authenticated
-        setShowLogin(false);
-        setShowSignup(false);
-        await fetchUserProfile(session.user.id);
-      }
-    });
-
-    return () => {
-      mountedRef.current = false;
-      subscription.unsubscribe();
-    };
-  }, [fetchUserProfile]);
-
+  // Toggle sidebar
   const toggleSidebar = useCallback(() => {
     setSidebarOpen(prev => !prev);
   }, []);
 
+  // Initialize auth on mount
+  useEffect(() => {
+    let isMounted = true;
+    console.log('AppContext: Starting auth initialization...');
+
+    const initAuth = async () => {
+      try {
+        // Get the current session from Supabase
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+        }
+
+        if (isMounted) {
+          console.log('AppContext: Session retrieved:', !!currentSession);
+          
+          if (currentSession?.user) {
+            setSession(currentSession);
+            setUser(currentSession.user);
+            await fetchUserProfile(currentSession.user.id);
+          }
+          
+          setIsLoading(false);
+          setAuthInitialized(true);
+          console.log('AppContext: Auth initialized, user:', !!currentSession?.user);
+        }
+      } catch (err) {
+        console.error('Auth initialization error:', err);
+        if (isMounted) {
+          setIsLoading(false);
+          setAuthInitialized(true);
+        }
+      }
+    };
+
+    // Initialize auth
+    initAuth();
+
+    // Subscribe to auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, newSession) => {
+        if (!isMounted) return;
+        
+        console.log('Auth state changed:', event, !!newSession?.user);
+
+        if (event === 'SIGNED_IN' && newSession?.user) {
+          setSession(newSession);
+          setUser(newSession.user);
+          setShowLogin(false);
+          setShowSignup(false);
+          await fetchUserProfile(newSession.user.id);
+        } else if (event === 'SIGNED_OUT') {
+          setSession(null);
+          setUser(null);
+          setUserProfile(null);
+          setCurrentView('home');
+        } else if (event === 'TOKEN_REFRESHED' && newSession) {
+          setSession(newSession);
+          setUser(newSession.user);
+        }
+        
+        // Mark as initialized on any auth event
+        if (!authInitialized) {
+          setAuthInitialized(true);
+          setIsLoading(false);
+        }
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [fetchUserProfile, authInitialized]);
+
+  const value: AppContextType = {
+    sidebarOpen,
+    toggleSidebar,
+    user,
+    session,
+    userProfile,
+    isLoading,
+    authInitialized,
+    setUser,
+    setUserProfile,
+    refreshProfile,
+    logout,
+    currentView,
+    setCurrentView,
+    showLogin,
+    setShowLogin,
+    showSignup,
+    setShowSignup,
+    isTrustee,
+  };
+
   return (
-    <AppContext.Provider
-      value={{
-        sidebarOpen,
-        toggleSidebar,
-        user,
-        setUser,
-        userProfile,
-        setUserProfile,
-        currentView,
-        setCurrentView,
-        refreshProfile,
-        isTrustee,
-        logout,
-        showLogin,
-        setShowLogin,
-        showSignup,
-        setShowSignup,
-        authInitialized,
-      }}
-    >
+    <AppContext.Provider value={value}>
       {children}
     </AppContext.Provider>
   );
