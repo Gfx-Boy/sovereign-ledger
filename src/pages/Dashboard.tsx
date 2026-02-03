@@ -31,7 +31,7 @@ const Dashboard: React.FC = () => {
   const loadingRef = useRef(false);
 
   const loadMyDocuments = useCallback(async (force = false) => {
-    console.log('loadMyDocuments called, user:', !!user, 'mounted:', mountedRef.current, 'loading:', loadingRef.current);
+    console.log('loadMyDocuments called, user:', !!user, 'mounted:', mountedRef.current, 'loading:', loadingRef.current, 'force:', force);
     
     if (!user) {
       console.log('No user, skipping document load');
@@ -44,14 +44,9 @@ const Dashboard: React.FC = () => {
       return;
     }
     
+    // Prevent duplicate simultaneous loads
     if (loadingRef.current && !force) {
       console.log('Already loading, skipping');
-      return;
-    }
-    
-    if (documentsLoadedRef.current && !force) {
-      console.log('Documents already loaded, skipping');
-      setLoadingDocuments(false);
       return;
     }
     
@@ -114,20 +109,20 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     setCurrentView('dashboard');
     mountedRef.current = true;
-    // Reset refs when component mounts - always reload documents on fresh mount
-    documentsLoadedRef.current = false;
-    loadingRef.current = false;
     
     return () => {
       mountedRef.current = false;
     };
   }, [setCurrentView]);
 
-  // Load documents when user is available or view changes
+  // Load documents whenever we're in dashboard view and user is available
   useEffect(() => {
     console.log('Dashboard effect - user:', !!user, 'showUpload:', showUpload, 'showSearch:', showSearch, 'showCertificate:', showCertificate);
+    
+    // Reset the loaded flag when entering dashboard view
     if (user && !showUpload && !showSearch && !showCertificate) {
-      console.log('Triggering document load...');
+      documentsLoadedRef.current = false;
+      console.log('Loading documents for dashboard...');
       loadMyDocuments(true);
     }
   }, [user, showUpload, showSearch, showCertificate, loadMyDocuments]);
@@ -160,7 +155,7 @@ const Dashboard: React.FC = () => {
     setUploadedDocument(document);
     setShowUpload(false);
     setShowCertificate(true);
-    documentsLoadedRef.current = false;
+    // Document will reload when we return to dashboard
   };
 
   const handleSearchResults = (documents: any[]) => {
@@ -177,12 +172,11 @@ const Dashboard: React.FC = () => {
     setSelectedDocument(null);
     setUploadedDocument(null);
     setCurrentView('dashboard');
-    documentsLoadedRef.current = false;
-    loadMyDocuments(true);
+    // Documents will reload via useEffect
   };
 
   const handleDocumentDeleted = useCallback(() => {
-    documentsLoadedRef.current = false;
+    // Reload documents immediately after deletion
     loadMyDocuments(true);
   }, [loadMyDocuments]);
 
