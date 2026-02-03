@@ -13,7 +13,7 @@ import RecordCertificate from '@/components/RecordCertificate';
 import { useNavigate } from 'react-router-dom';
 
 const Dashboard: React.FC = () => {
-  const { setCurrentView, user, userProfile } = useAppContext();
+  const { setCurrentView, user, userProfile, authInitialized } = useAppContext();
   const [showUpload, setShowUpload] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showCertificate, setShowCertificate] = useState(false);
@@ -25,33 +25,18 @@ const Dashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [documentStats, setDocumentStats] = useState({ total: 0, public: 0, private: 0, lastRecorded: null as Date | null });
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
-  const [authChecking, setAuthChecking] = useState(true);
   const navigate = useNavigate();
   const mountedRef = useRef(true);
   const documentsLoadedRef = useRef(false);
   const loadingRef = useRef(false);
 
-  // Check authentication on mount
+  // Redirect to login if not authenticated after auth check completes
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        console.log('Dashboard auth check - session exists:', !!session);
-        
-        if (!session) {
-          console.log('No session found, redirecting to login');
-          navigate('/login');
-        }
-      } catch (error) {
-        console.error('Auth check error:', error);
-        navigate('/login');
-      } finally {
-        setAuthChecking(false);
-      }
-    };
-
-    checkAuth();
-  }, [navigate]);
+    if (authInitialized && !user) {
+      console.log('Dashboard: No user after auth initialized, redirecting to login');
+      navigate('/login');
+    }
+  }, [authInitialized, user, navigate]);
 
   const loadMyDocuments = useCallback(async (force = false) => {
     console.log('loadMyDocuments called, user:', !!user, 'mounted:', mountedRef.current, 'loading:', loadingRef.current, 'force:', force);
@@ -140,21 +125,21 @@ const Dashboard: React.FC = () => {
 
   // Load documents whenever we're in dashboard view and user is available
   useEffect(() => {
-    console.log('Dashboard effect - authChecking:', authChecking, 'user:', !!user, 'showUpload:', showUpload, 'showSearch:', showSearch, 'showCertificate:', showCertificate);
+    console.log('Dashboard effect - authInitialized:', authInitialized, 'user:', !!user, 'showUpload:', showUpload, 'showSearch:', showSearch, 'showCertificate:', showCertificate);
     
-    // Wait for auth check to complete before trying to load documents
-    if (authChecking) {
-      console.log('Auth still checking, waiting...');
+    // Wait for auth to initialize before trying to load documents
+    if (!authInitialized) {
+      console.log('Auth not initialized yet, waiting...');
       return;
     }
     
-    // Reset the loaded flag when entering dashboard view
+    // Load documents when in dashboard view and user is logged in
     if (user && !showUpload && !showSearch && !showCertificate) {
       documentsLoadedRef.current = false;
       console.log('Loading documents for dashboard...');
       loadMyDocuments(true);
     }
-  }, [authChecking, user, showUpload, showSearch, showCertificate, loadMyDocuments]);
+  }, [authInitialized, user, showUpload, showSearch, showCertificate, loadMyDocuments]);
 
   const handleViewProfile = () => {
     setCurrentView('profile');
@@ -216,8 +201,8 @@ const Dashboard: React.FC = () => {
 
   const displayName = userProfile?.full_name || userProfile?.display_name || user?.email || 'User';
 
-  // Show loading screen while checking authentication
-  if (authChecking) {
+  // Show loading screen while auth is initializing
+  if (!authInitialized) {
     return (
       <AppLayout>
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-amber-50 p-4 flex items-center justify-center">
@@ -230,7 +215,7 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  // If no user after auth check, this will be handled by redirect in useEffect
+  // If no user after auth initialization, redirect (handled by useEffect)
   if (!user) {
     return (
       <AppLayout>

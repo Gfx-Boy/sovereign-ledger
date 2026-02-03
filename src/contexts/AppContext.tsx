@@ -28,6 +28,7 @@ interface AppContextType {
   setShowLogin: (show: boolean) => void;
   showSignup: boolean;
   setShowSignup: (show: boolean) => void;
+  authInitialized: boolean;
 }
 
 const defaultAppContext: AppContextType = {
@@ -46,6 +47,7 @@ const defaultAppContext: AppContextType = {
   setShowLogin: () => {},
   showSignup: false,
   setShowSignup: () => {},
+  authInitialized: false,
 };
 
 const AppContext = createContext<AppContextType>(defaultAppContext);
@@ -59,6 +61,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentView, setCurrentView] = useState<'home' | 'upload' | 'search' | 'certificate' | 'dashboard' | 'profile' | 'trustee-upload' | 'trustee-dashboard' | 'knowledge-base'>('home');
   const [showLogin, setShowLogin] = useState(false);
   const [showSignup, setShowSignup] = useState(false);
+  const [authInitialized, setAuthInitialized] = useState(false);
   const mountedRef = useRef(true);
   const authInitializedRef = useRef(false);
 
@@ -117,16 +120,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (authInitializedRef.current) return;
       
       try {
+        console.log('AppContext: Initializing auth...');
         const { data: { session } } = await supabase.auth.getSession();
         if (mountedRef.current) {
+          console.log('AppContext: Session check complete, user exists:', !!session?.user);
           setUser(session?.user ?? null);
           if (session?.user) {
             await fetchUserProfile(session.user.id);
           }
           authInitializedRef.current = true;
+          setAuthInitialized(true);
+          console.log('AppContext: Auth initialized');
         }
       } catch (error) {
         console.error('Error getting session:', error);
+        setAuthInitialized(true); // Still mark as initialized even on error
       }
     };
 
@@ -147,6 +155,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setShowLogin(false);
         setShowSignup(false);
         await fetchUserProfile(session.user.id);
+      }
+      
+      // Make sure auth is marked as initialized after any auth state change
+      if (!authInitializedRef.current) {
+        authInitializedRef.current = true;
+        setAuthInitialized(true);
       }
     });
 
@@ -178,6 +192,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setShowLogin,
         showSignup,
         setShowSignup,
+        authInitialized,
       }}
     >
       {children}
