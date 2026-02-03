@@ -112,6 +112,7 @@ export const uploadDocument = async (params: UploadParams) => {
     };
     
     console.log('Making request to:', UPLOAD_FUNCTION_URL);
+    console.log('Request body isPublic:', requestBody.isPublic, 'from params.isPublic:', params.isPublic);
     const response = await fetch(UPLOAD_FUNCTION_URL, {
       method: 'POST',
       headers,

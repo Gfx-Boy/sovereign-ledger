@@ -87,6 +87,7 @@ const UploadForm: React.FC<UploadFormProps> = ({ onUploadComplete }) => {
       console.log('Starting upload process...');
       console.log('File object:', file);
       console.log('File details:', { name: file?.name, size: file?.size, type: file?.type });
+      console.log('isPublic state:', isPublic);
       
       const result = await uploadDocument({
         file,
