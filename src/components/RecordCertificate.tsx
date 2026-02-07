@@ -48,7 +48,7 @@ const RecordCertificate: React.FC<RecordCertificateProps> = ({ document, onBack 
         </div>
       </div>
 
-      <Card className="border-2 border-gray-300">
+      <Card className="border-2 border-gray-300 print-certificate">
         <CardHeader className="text-center bg-gradient-to-r from-blue-50 to-indigo-50 p-4 sm:p-6">
           <CardTitle className="text-xl sm:text-3xl font-bold text-gray-800">
             SOVEREIGN RECORD ARCHIVE

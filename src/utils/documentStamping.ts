@@ -20,35 +20,19 @@ const stampPage = (
   const stampX = width - 250;
   const stampY = 35;
   
-  // Add "Recorded by:" label and name in red
-  page.drawText('Recorded by:', {
+  // Add "Recorded by: Name" on one line in red
+  page.drawText(`Recorded by: ${submitterText}`, {
     x: stampX,
-    y: stampY + 25,
-    size: 11,
-    font,
-    color: rgb(0.8, 0, 0),
-  });
-  
-  page.drawText(submitterText, {
-    x: stampX,
-    y: stampY + 10,
+    y: stampY + 12,
     size: 10,
     font,
     color: rgb(0.8, 0, 0),
   });
   
-  // Add "Recorded on:" label and timestamp in red
-  page.drawText('Recorded on:', {
+  // Add "Recorded on: Date" on one line in red
+  page.drawText(`Recorded on: ${timestamp}`, {
     x: stampX,
     y: stampY - 5,
-    size: 11,
-    font,
-    color: rgb(0.8, 0, 0),
-  });
-  
-  page.drawText(timestamp, {
-    x: stampX,
-    y: stampY - 20,
     size: 10,
     font,
     color: rgb(0.8, 0, 0),
