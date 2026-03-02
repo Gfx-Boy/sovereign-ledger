@@ -20,6 +20,7 @@ interface UploadParams {
 }
 
 let uploadInProgress = false;
+const DIRECT_UPLOAD_THRESHOLD_BYTES = 8 * 1024 * 1024; // 8 MB
 
 const uint8ArrayToBase64 = (bytes: Uint8Array): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -183,14 +184,44 @@ export const uploadDocument = async (params: UploadParams) => {
           clientName: params.clientName
         };
         const stampedPdfBytes = await addStampToDocument(pdfBytes, stampOptions);
-        console.log('Stamping complete, converting to base64...');
         bytesForFallback = stampedPdfBytes;
+
+        const shouldUseDirectUploadFirst =
+          (params.file.size || 0) > DIRECT_UPLOAD_THRESHOLD_BYTES ||
+          stampedPdfBytes.length > DIRECT_UPLOAD_THRESHOLD_BYTES;
+        if (shouldUseDirectUploadFirst) {
+          console.log('Large file detected. Using direct upload path first.');
+          const fallbackDocument = await attemptDirectUploadFallback(
+            params,
+            stampedPdfBytes,
+            fileName,
+            contentType
+          );
+          return { success: true, document: fallbackDocument };
+        }
+
+        console.log('Stamping complete, converting to base64...');
         fileDataToUpload = await uint8ArrayToBase64(stampedPdfBytes);
       } else {
         console.log('Processing non-PDF file:', params.file.name);
         const arrayBuffer = await params.file.arrayBuffer();
         const bytes = new Uint8Array(arrayBuffer);
         bytesForFallback = bytes;
+
+        const shouldUseDirectUploadFirst =
+          (params.file.size || 0) > DIRECT_UPLOAD_THRESHOLD_BYTES ||
+          bytes.length > DIRECT_UPLOAD_THRESHOLD_BYTES;
+        if (shouldUseDirectUploadFirst) {
+          console.log('Large file detected. Using direct upload path first.');
+          const fallbackDocument = await attemptDirectUploadFallback(
+            params,
+            bytes,
+            fileName,
+            contentType
+          );
+          return { success: true, document: fallbackDocument };
+        }
+
         fileDataToUpload = await uint8ArrayToBase64(bytes);
       }
     } else {
