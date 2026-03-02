@@ -15,8 +15,10 @@ update storage.buckets
 set file_size_limit = null
 where id = 'documents';
 
--- 2) Storage RLS policies for bucket `documents`
-alter table storage.objects enable row level security;
+-- 2) Storage policies for bucket `documents`
+-- NOTE:
+-- Supabase-managed `storage.objects` cannot be altered by user SQL in many projects.
+-- RLS is already enabled there by default, so we only manage policies below.
 
 drop policy if exists "documents_insert_own_folder" on storage.objects;
 create policy "documents_insert_own_folder"
