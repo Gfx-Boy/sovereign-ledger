@@ -21,6 +21,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userEmail, onBack }) => {
   const [displayName, setDisplayName] = useState('');
   const [profileImageUrl, setProfileImageUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [resetEmail, setResetEmail] = useState(userEmail);
+  const [sendingResetLink, setSendingResetLink] = useState(false);
   const { toast } = useToast();
   const mountedRef = useRef(true);
   const saveInProgressRef = useRef(false);
@@ -51,6 +53,10 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userEmail, onBack }) => {
       };
     }
   }, [userProfile]);
+
+  useEffect(() => {
+    setResetEmail(userEmail);
+  }, [userEmail]);
 
   const handleSave = async () => {
     if (!user || saveInProgressRef.current || !mountedRef.current) {
@@ -148,6 +154,41 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userEmail, onBack }) => {
 
   const handleImageUpload = (url: string) => {
     setProfileImageUrl(url);
+  };
+
+  const handleSendPasswordSetupLink = async () => {
+    if (!resetEmail.trim()) {
+      toast({
+        title: 'Email required',
+        description: 'Enter an email to send a password setup link.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSendingResetLink(true);
+    try {
+      const redirectTo = `${window.location.origin}/reset-password`;
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
+        redirectTo,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Set password link sent',
+        description: `A secure setup link was sent to ${resetEmail.trim()}.`,
+      });
+    } catch (error: any) {
+      console.error('Failed to send password setup link:', error);
+      toast({
+        title: 'Could not send link',
+        description: error?.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSendingResetLink(false);
+    }
   };
 
   const getInitials = (name: string) => {
@@ -248,6 +289,30 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ userEmail, onBack }) => {
                   userId={user.id}
                 />
               )}
+
+              <div className="space-y-3 p-4 rounded-md border bg-slate-50">
+                <Label htmlFor="reset-email" className="font-medium">Send "Set Your Password" Link</Label>
+                <Input
+                  id="reset-email"
+                  type="email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  placeholder="client@example.com"
+                  disabled={sendingResetLink}
+                />
+                <p className="text-xs text-muted-foreground">
+                  The secure, email-specific password setup link is sent directly to this inbox.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-amber-600 text-amber-600 hover:bg-amber-600 hover:text-white"
+                  onClick={handleSendPasswordSetupLink}
+                  disabled={sendingResetLink}
+                >
+                  {sendingResetLink ? 'Sending link...' : 'Send Set Password Link'}
+                </Button>
+              </div>
             </div>
 
             <Button 
